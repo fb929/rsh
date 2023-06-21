@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import sys
+sys.path.append('/opt/rsh')
+import rsh.config
+import argparse
+import pexpect
+import gnupg
+import getpass
+import struct
+import signal
+import fcntl
+import termios
+import inspect
+import re
+import os
+import yaml
+
+# parse args {{
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    'host',
+    help = 'host for login',
+)
+args = parser.parse_args()
+# }}
+
+# defs
+def decryptFile(requestPass=False):
+    defName = inspect.stack()[0][3]
+
+    if requestPass:
+        password = getpass.getpass()
+        if not password:
+            rsh.config.logging.error("%s: failed get pass" % (defName))
+            exit(1)
+
+    gpg = gnupg.GPG(use_agent=True)
+    gpg.encoding = 'utf-8'
+
+    with open(rsh.config.cfg['gpgFile'], 'rb') as cryptoInfile:
+        try:
+            if requestPass:
+                decryptedData = gpg.decrypt_file(cryptoInfile,passphrase=password)
+            else:
+                decryptedData = gpg.decrypt_file(cryptoInfile)
+        except Exception as e:
+            rsh.config.logging.error("%s: failed decrypt data, error: '%s'" % (defName,str(e)))
+            exit(1)
+
+    if decryptedData:
+        return str(decryptedData).rstrip()
+    else:
+        if requestPass:
+            rsh.config.logging.error("%s: 'decryptedData' is empty, please check encrypt file='%s'" % (defName,rsh.config.cfg['gpgFile']))
+            exit(1)
+        else:
+            # retry with request password
+            decryptFile(requestPass=True)
+
+def getRootPassword(host):
+    defName = inspect.stack()[0][3]
+
+    decryptedData = decryptFile()
+    for line in decryptedData.splitlines():
+        splitted = line.split('\t')
+        hostRegex = splitted[0]
+        rootPasswd = splitted[1]
+        if re.search(r''+hostRegex, host, re.IGNORECASE):
+            return rootPasswd
+
+    rsh.config.logging.error("%s: failed get root password for host='%s', please check password file='%s'" % (defName,rsh.config.cfg['gpgFile']))
+    exit(1)
+
+def getTerminalSize():
+    s = struct.pack("HHHH", 0, 0, 0, 0)
+    a = struct.unpack('hhhh', fcntl.ioctl(sys.stdout.fileno(), termios.TIOCGWINSZ, s))
+    return a[0], a[1]
+
+def sigwinchPassthrough(sig, data):
+    global child
+    if not child.closed:
+        child.setwinsize(*getTerminalSize())
+
+if __name__ == "__main__":
+    defName = "sr"
+    rootPassword = getRootPassword(host=args.host)
+    if rsh.config.cfg['sr']['useInventorySshHost']:
+        inventory = dict()
+        try:
+            with open(os.path.expanduser(rsh.config.cfg['inventoryFilePath']), 'r') as ymlfile:
+                inventory.update(yaml.load(ymlfile,Loader=yaml.Loader))
+        except Exception as e:
+            rsh.config.logging.error("%s: failed inventory from file: '%s', error: '%s'" % (defName,rsh.config.cfg['inventoryFilePath'],e))
+            exit(1)
+        inventoryHost = inventory['hosts'].get(args.host, None)
+        if inventoryHost:
+            sshHost = inventory['hosts'][args.host].get('sshHost', None)
+        else:
+            rsh.config.logging.error("%s: host='%s' not found in inventory file='%s'" % (defName,args.host,rsh.config.cfg['inventoryFilePath']))
+            exit(1)
+        if sshHost == None:
+            rsh.config.logging.error("%s: 'sshHost' not found for host='%s' in inventory file='%s'" % (defName,args.host,rsh.config.cfg['inventoryFilePath']))
+            exit(1)
+    else:
+        sshHost = args.host
+
+    # connect to host {{
+    child = pexpect.spawn('%s %s' % (rsh.config.cfg['sr']['ssh']['command'],sshHost))
+    child.setwinsize(*getTerminalSize())
+    signal.signal(signal.SIGWINCH, sigwinchPassthrough)
+    child.expect('\r\n', timeout=rsh.config.cfg['sr']['pexpect']['timeout'])
+    print(child.before.decode(encoding='UTF-8').rstrip())
+    # }}
+
+    # run post login command {{
+    if rsh.config.cfg['sr']['postLoginCommand'] != None:
+        child.sendline(rsh.config.cfg['sr']['postLoginCommand'])
+        child.expect('\r\n', timeout=rsh.config.cfg['sr']['pexpect']['timeout'])
+    # }}
+
+    # escalate privileges {{
+    child.sendline(rsh.config.cfg['sr']['escalatePrivilegesCommand'])
+    if rsh.config.cfg['sr']['escalatePrivilegesCommand'] == 'su -m':
+        child.expect('Password:', timeout=rsh.config.cfg['sr']['pexpect']['timeout'])
+        print(child.before.decode(encoding='UTF-8').rstrip())
+        print(child.after.decode(encoding='UTF-8').rstrip())
+        child.sendline(rootPassword)
+        child.expect('\r\n', timeout=rsh.config.cfg['sr']['pexpect']['timeout'])
+    elif rsh.config.cfg['sr']['escalatePrivilegesCommand'] == 'sudo -s':
+        child.expect('\r\n', timeout=rsh.config.cfg['sr']['pexpect']['timeout'])
+    else:
+        rsh.config.logging.error("%s: unsupported escalatePrivilegesCommand='%s'" % (defName,rsh.config.cfg['sr']['escalatePrivilegesCommand']))
+        exit(1)
+    # }}
+
+    # translation into interactive
+    child.interact()
