@@ -136,4 +136,4 @@ if __name__ == "__main__":
     # }}
 
     # translation into interactive
-    child.interact()
+    child.interact(escape_character=None)
