@@ -58,8 +58,9 @@ def getInstancesInfo(region):
     for reservation in reservations:
         instances = reservation['Instances']
         for instance in instances:
-            if instance['State']['Name'] != 'running':
-                continue
+            if rsh.config.cfg['awsInventory']['skipNotRunningInstance']:
+                if instance['State']['Name'] != 'running':
+                    continue
             info = {
                 'dc': instance['Placement']['AvailabilityZone'],
                 'tags': instance['Tags'],
@@ -100,12 +101,20 @@ if __name__ == "__main__":
         for tag in instanceInfo['tags']:
             if tag['Key'] in rsh.config.cfg['awsInventory']['skipTagsForMakeGroups']:
                 continue
-            groupName = 'tag' + '_' + tag['Key'].replace('-','_') + '_' + tag['Value'].replace('-','_')
+            groupName = 'tag_' + tag['Key'].replace('-','_') + '_' + tag['Value'].replace('-','_')
             groupName = re.sub(r'\s+', '_', groupName)
             if groupName not in inventory['groups']:
                 inventory['groups'][groupName] = list()
             if host not in inventory['groups'][groupName]:
                 inventory['groups'][groupName].append(host)
+        # }}
+        # groups by dc {{
+        groupName = 'dc_'+ instanceInfo['dc']
+        groupName = re.sub(r'\s+', '_', groupName)
+        if groupName not in inventory['groups']:
+            inventory['groups'][groupName] = list()
+        if host not in inventory['groups'][groupName]:
+            inventory['groups'][groupName].append(host)
         # }}
 
     # generating inventory file {{

@@ -31,6 +31,7 @@ cfg = {
             'Description',
             'description',
         ],
+        'skipNotRunningInstance': True, # skipping not running instance
     },
     'sr': {
         'ssh': {
