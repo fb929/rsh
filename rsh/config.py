@@ -32,6 +32,10 @@ cfg = {
             'description',
         ],
         'skipNotRunningInstance': True, # skipping not running instance
+        'hostInfoFields': [
+            'PrivateIpAddress',
+            'PublicIpAddress',
+        ],
     },
     'sr': {
         'ssh': {

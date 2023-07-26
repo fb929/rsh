@@ -70,6 +70,8 @@ def getInstancesInfo(region):
                     info['host'] = tag['Value']
 
             info['sshHost'] = instance.get(rsh.config.cfg['awsInventory']['sshHostField'], 'unknown')
+            for hostInfoField in rsh.config.cfg['awsInventory']['hostInfoFields']:
+                info[hostInfoField] = instance.get(hostInfoField, 'unknown')
             if info not in instancesInfo:
                 instancesInfo.append(info)
     return instancesInfo
@@ -96,6 +98,8 @@ if __name__ == "__main__":
         host = instanceInfo['host']
         if host not in inventory['hosts']:
             inventory['hosts'][host] = { 'sshHost': instanceInfo['sshHost'] }
+            for hostInfoField in rsh.config.cfg['awsInventory']['hostInfoFields']:
+                inventory['hosts'][host][hostInfoField] = instanceInfo[hostInfoField]
         # }}
         # groups {{
         for tag in instanceInfo['tags']:
