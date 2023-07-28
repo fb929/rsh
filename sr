@@ -23,6 +23,19 @@ parser.add_argument(
     'host',
     help = 'host for login',
 )
+group = parser.add_mutually_exclusive_group()
+group.add_argument(
+    '-i',
+    '--forceUseInventory',
+    action='store_true',
+    help = "force use inventory",
+)
+group.add_argument(
+    '-I',
+    '--forceDontUseInventory',
+    action='store_true',
+    help = "force don't use inventory",
+)
 args = parser.parse_args()
 # }}
 
@@ -86,6 +99,10 @@ def sigwinchPassthrough(sig, data):
 if __name__ == "__main__":
     defName = "sr"
     rootPassword = getRootPassword(host=args.host)
+    if args.forceUseInventory:
+        rsh.config.cfg['sr']['useInventorySshHost'] = True
+    if args.forceDontUseInventory:
+        rsh.config.cfg['sr']['useInventorySshHost'] = False
     if rsh.config.cfg['sr']['useInventorySshHost']:
         inventory = dict()
         try:
