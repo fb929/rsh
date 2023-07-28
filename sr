@@ -124,11 +124,11 @@ if __name__ == "__main__":
         sshHost = args.host
 
     # connect to host {{
-    child = pexpect.spawn('%s %s' % (rsh.config.cfg['sr']['ssh']['command'],sshHost))
+    child = pexpect.spawn('%s %s' % (rsh.config.cfg['sr']['ssh']['command'],sshHost), encoding='utf-8')
     child.setwinsize(*getTerminalSize())
     signal.signal(signal.SIGWINCH, sigwinchPassthrough)
     child.expect('\r\n', timeout=rsh.config.cfg['sr']['pexpect']['timeout'])
-    print(child.before.decode(encoding='UTF-8').rstrip())
+    print(child.before.rstrip())
     # }}
 
     # run post login command {{
@@ -141,8 +141,8 @@ if __name__ == "__main__":
     child.sendline(rsh.config.cfg['sr']['escalatePrivilegesCommand'])
     if rsh.config.cfg['sr']['escalatePrivilegesCommand'] == 'su -m':
         child.expect('Password:', timeout=rsh.config.cfg['sr']['pexpect']['timeout'])
-        print(child.before.decode(encoding='UTF-8').rstrip())
-        print(child.after.decode(encoding='UTF-8').rstrip())
+        print(child.before.rstrip())
+        print(child.after.rstrip())
         child.sendline(rootPassword)
         child.expect('\r\n', timeout=rsh.config.cfg['sr']['pexpect']['timeout'])
     elif rsh.config.cfg['sr']['escalatePrivilegesCommand'] == 'sudo -s':
