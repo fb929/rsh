@@ -5,7 +5,7 @@ build:
 		build/opt/rsh/ \
 
 	rsync -a \
-		rshAwsInventory.py \
+		rshInventory.py \
 		rshCompgen.py \
 		sr \
 		build/usr/bin/
