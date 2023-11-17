@@ -67,7 +67,7 @@ cfg = {
             'timeout': 120,
         },
         'useInventorySshHost': True, # use sshHost from inventory for connect to host
-        'escalatePrivilegesCommand': 'su -m', # variants: 'su -m', 'sudo -s'
+        'escalatePrivilegesCommand': 'sudo -s', # variants: 'su -m', 'sudo -s'
         'postLoginCommand': None # command will run after login, used to set up the environment
     },
 }
