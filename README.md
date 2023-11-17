@@ -17,6 +17,7 @@ pip install --user --requirement ./requirements.txt
   ```
   <hostname regex>\t<root password>
   ```
+
   example
   ```
   .*	myRootPasswd
@@ -30,12 +31,12 @@ pip install --user --requirement ./requirements.txt
 * install pip module ovh
 * configre ~/.rsh.yaml
   ```
-ovhInventory:
-  api:
-    endpoint: ovh-ca
-    application_key: xxx
-    application_secret: yyy
-    consumer_key: xxx
+  ovhInventory:
+    api:
+      endpoint: ovh-ca
+      application_key: xxx
+      application_secret: yyy
+      consumer_key: xxx
   ```
   (create api tokens)[https://help.ovhcloud.com/csm/en-api-getting-started-ovhcloud-api?id=kb_article_view&sysparm_article=KB0042777]
 
