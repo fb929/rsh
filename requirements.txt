@@ -1,5 +1,6 @@
-deepmerge
-pexpect
-gnupg
-ovh
-PyYAML
+deepmerge==1.1.0
+pexpect==4.8.0
+python-gnupg==0.5.0
+ovh==1.1.0
+PyYAML==6.0
+fabric==3.2.2
