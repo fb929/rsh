@@ -40,7 +40,12 @@ if __name__ == "__main__":
     inventory['groups'] = dict()
     for instanceInfo in instancesInfoArray:
         # hosts {{
-        host = instanceInfo['host']
+        try:
+            host = instanceInfo['host']
+        except:
+            print(instanceInfo)
+            logger.error(f"{defName}: key='host' not found in instanceInfo='{instanceInfo}'")
+            exit(1)
 
         # get rsh inventory module name {{
         rshInventoryModule = instanceInfo.get('rshInventoryModule', None)

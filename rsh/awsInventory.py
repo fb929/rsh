@@ -15,9 +15,7 @@ import logging
 
 class awsInventory():
     def __init__(self, cfg):
-        self.modulePath = self.__class__.__module__
-        self.className = self.__class__.__name__
-        self.logger = logging.getLogger(self.modulePath+'.'+self.className)
+        self.logger = logging.getLogger(__name__)
         self.cfg = cfg
 
     def runCmd(self,commands,communicate=True,stdoutJson=True):
@@ -72,17 +70,23 @@ class awsInventory():
                 if self.cfg['awsInventory']['skipNotRunningInstance']:
                     if instance['State']['Name'] != 'running':
                         continue
+                try:
+                    dc = instance['Placement']['AvailabilityZone']
+                except:
+                    self.logger.error(f"{defName}: failed get Placement.AvailabilityZone from instance={instance}")
+                    exit(1)
+                tags = instance.get('Tags', []) # tags is optional
                 info = {
-                    'dc': instance['Placement']['AvailabilityZone'],
-                    'tags': instance['Tags'],
+                    'dc': dc,
+                    'tags': tags,
                 }
-                for tag in instance['Tags']:
+                for tag in tags:
                     if tag['Key'] == 'Name':
                         info['host'] = tag['Value']
 
                 # add default tag
                 # added rsh inventory info {{
-                info['rshInventoryModule'] = self.className
+                info['rshInventoryModule'] = self.__class__.__name__
                 info['hosting'] = 'aws'
                 # }}
 
