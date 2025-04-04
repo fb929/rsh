@@ -115,10 +115,10 @@ if __name__ == "__main__":
         if inventoryHost:
             sshHost = inventory['hosts'][args.host].get('sshHost', None)
         else:
-            rsh.config.logging.error("%s: host='%s' not found in inventory file='%s'" % (defName,args.host,rsh.config.cfg['inventoryFilePath']))
-            exit(1)
+            rsh.config.logging.warning("%s: host='%s' not found in inventory file='%s'" % (defName,args.host,rsh.config.cfg['inventoryFilePath']))
+            sshHost = args.host
         if sshHost == None:
-            rsh.config.logging.error("%s: 'sshHost' not found for host='%s' in inventory file='%s'" % (defName,args.host,rsh.config.cfg['inventoryFilePath']))
+            rsh.config.logging.error("%s: unexpected error 'sshHost'='%s'" % (defName,sshHost))
             exit(1)
     else:
         sshHost = args.host
