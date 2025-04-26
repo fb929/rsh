@@ -65,7 +65,6 @@ class ovhInventory():
                 'internalName': dedicatedServerInfo['name'],
                 'dc': dc,
             }
-            info['sshHost'] = infoMap.get(self.cfg['ovhInventory']['sshHostField'], 'unknown')
             for hostInfoField in self.cfg['ovhInventory']['hostInfoFields']:
                 info[hostInfoField] = infoMap.get(hostInfoField, 'unknown')
             if info not in instancesInfo:
@@ -79,5 +78,8 @@ class ovhInventory():
             # }}
             # set host
             info['host'] = infoMap['customName']
+
+            # set sshHost
+            info['sshHost'] = info.get(self.cfg['ovhInventory']['sshHostField'], 'unknown')
 
         return instancesInfo
