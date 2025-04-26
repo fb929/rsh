@@ -8,13 +8,22 @@ import yaml
 import json
 import os
 
-inventory = dict()
-try:
-    with open(os.path.expanduser(rsh.config.cfg['inventoryFilePath']), 'r') as ymlfile:
-        inventory.update(yaml.load(ymlfile,Loader=yaml.Loader))
-except Exception as e:
-    rsh.config.logging.error("compgen: failed inventory from file: '%s', error: '%s'" % (rsh.config.cfg['inventoryFilePath'],e))
-    exit(1)
+from rsh import exec_functions
 
-hosts = list(inventory['hosts'].keys())
-print(' '.join(hosts))
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        rsh.config.logging.error("An argument is required ('hosts' or 'groups').")
+        sys.exit(1)
+
+    inventory = exec_functions.load_inventory()
+
+    arg = sys.argv[1]
+    if arg == "hosts":
+        hosts = list(inventory['hosts'].keys())
+        print(' '.join(hosts))
+    elif arg == "groups":
+        groups = list(inventory['groups'].keys())
+        print(' '.join(groups))
+    else:
+        rsh.config.logging.error(f"Unsupported argument '{arg}'. Only 'hosts' or 'groups' are allowed.")
+        sys.exit(1)
