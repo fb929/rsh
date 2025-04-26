@@ -55,7 +55,7 @@ class awsInventory(
                 info['hosting'] = 'aws'
                 # }}
 
-                info['sshHost'] = instance.get(self.cfg['awsInventory']['sshHostField'], 'unknown')
+                info['sshHost'] = info.get(self.cfg['awsInventory']['sshHostField'], 'unknown')
                 for hostInfoField in self.cfg['awsInventory']['hostInfoFields']:
                     info[hostInfoField] = instance.get(hostInfoField, 'unknown')
                 if info not in instancesInfo:

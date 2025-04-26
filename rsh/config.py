@@ -31,7 +31,7 @@ cfg = {
     'awsInventory': {
         'enable': True,
         'regions': [],
-        'sshHostField': 'PrivateIpAddress', # field for 'sshHost' in aws data, variants: PublicDnsName, PublicIpAddress, PrivateDnsName, PrivateIpAddress
+        'sshHostField': 'host',             # field for 'sshHost', variants: host, PublicDnsName, PublicIpAddress, PrivateDnsName, PrivateIpAddress
         'skipTagsForMakeGroups': [          # these tag 'key' will skip when creating groups
             'Name',
             'Description',
@@ -51,7 +51,7 @@ cfg = {
             'application_secret': 'yyy',    # Application Secret
             'consumer_key': 'zzz',          # Consumer Key
         },
-        'sshHostField': 'customName',       # field for 'sshHost' in ovh data, variants: customName, publicIp, internalName
+        'sshHostField': 'host',             # field for 'sshHost', variants: host, customName, publicIp, internalName
         'skipTagsForMakeGroups': [],        # these tag 'key' will skip when creating groups
         'hostInfoFields': [
             'publicIp',
@@ -62,13 +62,16 @@ cfg = {
     'gceInventory': {
         'enable': True,
         'skipNotRunningInstance': True,     # skipping not running instance
-        'sshHostField': 'PrivateIpAddress',
+        'sshHostField': 'host',             # field for 'sshHost', variants: host, PrivateIpAddress, PublicIpAddress
         'hostInfoFields': [
             'PrivateIpAddress',
             'PublicIpAddress',
             'dc',
         ],
         'skipTagsForMakeGroups': [],        # these tag 'key' will skip when creating groups
+        'skipTagsForMakeGroups': [          # these tag 'key' will skip when creating groups
+            'name',
+        ],
         'nameSuffix': '.gc',                # suffix for instance names
     },
     'sr': {
