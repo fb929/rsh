@@ -8,6 +8,8 @@ build:
 		rshInventory.py \
 		rshCompgen.py \
 		sr \
+		pExec \
+		sExec \
 		build/usr/bin/
 
 	rsync -a rshCompletion.sh build/etc/profile.d/
