@@ -63,7 +63,7 @@ jobs:
         run: |
           ls -al ./
 
-      - name: Create selease deb
+      - name: Create release deb
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -74,7 +74,10 @@ jobs:
           fail_on_unmatched_files: true
           files: '*.deb'
 
-      - name: Create selease rpm
+      - name: sleep between deb and rpm
+        run: sleep 3
+
+      - name: Create release rpm
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
