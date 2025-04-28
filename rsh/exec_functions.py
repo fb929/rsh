@@ -57,7 +57,7 @@ def run_command(GroupClass, hosts, command):
     try:
         group = GroupClass(*hosts)
         for connection in group:
-            result = connection.sudo(command, hide=True)
+            result = connection.sudo(command, warn=True, hide=True, pty=False)
             print(f"[{connection.host}]:\n{result.stdout.strip()}")
             if len(hosts) > 1:
                 print('===\n')
