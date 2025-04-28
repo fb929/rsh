@@ -55,8 +55,13 @@ def run_command(GroupClass, hosts, command):
     rsh.config.logging.debug(f"hosts={json.dumps(hosts)}")
     rsh.config.logging.debug(f"command='{command}'")
     try:
-        result = GroupClass(*hosts).run(command)
-        return result
+        group = GroupClass(*hosts)
+        for connection in group:
+            result = connection.sudo(command, hide=True)
+            print(f"[{connection.host}]:\n{result.stdout.strip()}")
+            if len(hosts) > 1:
+                print('===\n')
+        return
     except Exception as e:
         rsh.config.logging.error(f"Command execution failed: {e}")
         sys.exit(1)
