@@ -72,17 +72,15 @@ jobs:
           draft: false
           prerelease: false
           fail_on_unmatched_files: true
-          files: |
-            '*.deb'
-            '*.rpm'
+          files: '*.deb'
 
-#      - name: Create selease rpm
-#        uses: softprops/action-gh-release@v2
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#        with:
-#          generate_release_notes: true
-#          draft: false
-#          prerelease: false
-#          fail_on_unmatched_files: true
-#          files: '*.rpm'
+      - name: Create selease rpm
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
+          files: '*.rpm'
