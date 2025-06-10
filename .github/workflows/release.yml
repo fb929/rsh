@@ -64,7 +64,7 @@ jobs:
           ls -al ./
 
       - name: Create release deb
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -78,7 +78,7 @@ jobs:
         run: sleep 3
 
       - name: Create release rpm
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
