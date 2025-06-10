@@ -56,11 +56,13 @@ def run_command(GroupClass, hosts, command):
     rsh.config.logging.debug(f"command='{command}'")
     try:
         group = GroupClass(*hosts)
-        for connection in group:
-            result = connection.sudo(command, warn=True, hide=True, pty=False)
-            print(f"[{connection.host}]:\n{result.stdout.strip()}")
+        results = group.sudo(command, warn=True, hide=True, pty=True)
+
+        for conn, result in results.items():
+            print(f"[{conn.host}]:\n{result.stdout.strip()}")
             if len(hosts) > 1:
-                print('===\n')
+                print("===\n")
+
         return
     except Exception as e:
         rsh.config.logging.error(f"Command execution failed: {e}")
