@@ -6,6 +6,7 @@ sys.path.append('/opt/rsh')
 import inspect
 import logging
 import json
+import re
 
 from .common import CommonMixin
 
@@ -55,7 +56,7 @@ class gceInventory(
             status = describeInstance['status']
             if self.cfg['gceInventory']['skipNotRunningInstance']:
                 if status != 'RUNNING':
-                    self.logger.DEBUG(f"{defName}: skipping instance name='{name}', because its status is not 'RUNNING'")
+                    self.logger.debug(f"{defName}: skipping instance name='{name}', because its status is not 'RUNNING'")
                     continue
             zone = describeInstance['zone']
             dc = zone.split('/')[-1]
@@ -64,7 +65,13 @@ class gceInventory(
             tags = list()
             for item in describeInstance['metadata']['items']:
                 if item['key'] == 'startup-script':
-                    # skipping startup-script metadata
+                    self.logger.debug(f"{defName}: skipping item key='{item['key']}', because it's startup-script")
+                    continue
+                elif not re.fullmatch(r"[A-Za-z0-9_-]+", item['key']):
+                    self.logger.debug(f"{defName}: skipping item key='{item['key']}', because 'key' does not match a simple string")
+                    continue
+                elif not re.fullmatch(r"[A-Za-z0-9_-]+", item['value']):
+                    self.logger.debug(f"{defName}: skipping item key='{item['key']}', because 'value' does not match a simple string")
                     continue
                 else:
                     tags.append({ "Key": item['key'], "Value": item['value'] })
