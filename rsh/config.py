@@ -42,6 +42,7 @@ cfg = {
             'PrivateIpAddress',
             'PublicIpAddress',
         ],
+        'nameSuffix': '.aws',               # suffix for instance names
     },
     'ovhInventory': {
         'enable': True,

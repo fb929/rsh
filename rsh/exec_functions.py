@@ -65,5 +65,9 @@ def run_command(GroupClass, hosts, command):
 
         return
     except Exception as e:
-        rsh.config.logging.error(f"Command execution failed: {e}")
+        try:
+            for i in e:
+                rsh.config.logging.error(f"Command execution failed: {i}")
+        except:
+            rsh.config.logging.error(f"Command execution failed: {e}")
         sys.exit(1)

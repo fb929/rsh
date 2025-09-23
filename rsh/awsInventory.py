@@ -49,6 +49,10 @@ class awsInventory(
                     if tag['Key'] == 'Name':
                         info['host'] = tag['Value']
 
+                if self.cfg['awsInventory']['nameSuffix']:
+                    # set name suffix if need
+                    info['host'] = info['host'] + self.cfg['awsInventory']['nameSuffix']
+
                 # add default tag
                 # added rsh inventory info {{
                 info['rshInventoryModule'] = self.__class__.__name__
