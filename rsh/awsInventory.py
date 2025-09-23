@@ -59,9 +59,13 @@ class awsInventory(
                 info['hosting'] = 'aws'
                 # }}
 
-                info['sshHost'] = info.get(self.cfg['awsInventory']['sshHostField'], 'unknown')
+                # addication data
                 for hostInfoField in self.cfg['awsInventory']['hostInfoFields']:
                     info[hostInfoField] = instance.get(hostInfoField, 'unknown')
+
+                # ssh host field
+                info['sshHost'] = info.get(self.cfg['awsInventory']['sshHostField'], 'unknown')
+
                 if info not in instancesInfo:
                     instancesInfo.append(info)
         return instancesInfo
