@@ -3,11 +3,11 @@
 
 import sys
 sys.path.append('/opt/rsh')
-from fabric import SerialGroup
+
 from rsh import exec_functions
 
 if __name__ == "__main__":
     hosts_or_groups, command = exec_functions.parse_arguments()
     inventory = exec_functions.load_inventory()
     hosts = exec_functions.resolve_hosts(hosts_or_groups, inventory)
-    exec_functions.run_command(SerialGroup, hosts, command)
+    exec_functions.run_command_sequential(hosts, command)
