@@ -15,6 +15,25 @@ import ovh
 
 logger = logging.getLogger(__name__)
 
+# natural sort helper:
+# - split by non-alphanumeric
+# - then split into alpha vs digits
+# - compare strings before numbers; numbers as integers
+def _natsort_tokens_key(host):
+    left = str(host).split('.', 1)[0]  # strip domain part like ".aws"
+    rough_tokens = re.split(r'[^A-Za-z0-9]+', left)
+    tokens = []
+    for t in rough_tokens:
+        if not t:
+            continue
+        parts = re.findall(r'[A-Za-z]+|\d+', t)
+        for p in parts:
+            if p.isdigit():
+                tokens.append((1, int(p)))
+            else:
+                tokens.append((0, p.lower()))
+    return tokens
+
 if __name__ == "__main__":
     defName = "main"
     logger.debug("%s: cfg='%s'" % (defName,json.dumps(rsh.config.cfg,indent=4)))
@@ -77,8 +96,21 @@ if __name__ == "__main__":
             inventory['groups'][groupName].append(host)
         # }}
 
+    # natural sort hosts and groups {{
+    # hosts: sort hostnames using token-aware natural order
+    sorted_hostnames = sorted(inventory['hosts'].keys(), key=_natsort_tokens_key)
+    inventory['hosts'] = { hn: inventory['hosts'][hn] for hn in sorted_hostnames }
+
+    # groups: sort group names; inside each group sort hosts using the same key
+    sorted_group_names = sorted(inventory['groups'].keys(), key=_natsort_tokens_key)
+    sorted_groups = dict()
+    for g in sorted_group_names:
+        sorted_groups[g] = sorted(inventory['groups'][g], key=_natsort_tokens_key)
+    inventory['groups'] = sorted_groups
+    # }}
+
     # generating inventory file {{
     logger.debug("%s: inventory='%s'" % (defName,inventory))
     with open(os.path.expanduser(rsh.config.cfg['inventoryFilePath']), 'w') as f:
-        yaml.dump(inventory, f, default_flow_style=False)
+        yaml.dump(inventory, f, default_flow_style=False, sort_keys=False)
     # }}
