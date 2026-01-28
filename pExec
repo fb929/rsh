@@ -8,7 +8,7 @@ from fabric import ThreadingGroup
 from rsh import exec_functions
 
 if __name__ == "__main__":
-    hosts_or_groups, command = exec_functions.parse_arguments()
+    hosts_or_groups, command, delay = exec_functions.parse_arguments()
     inventory = exec_functions.load_inventory()
     hosts = exec_functions.resolve_hosts(hosts_or_groups, inventory)
     # Run in parallel and deduplicate identical outputs
