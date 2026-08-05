@@ -25,7 +25,7 @@ pip install --user --requirement ./requirements.txt
 * configure ~/.rsh.yaml
   ```
   sr:
-    escalatePrivilegesCommand: 'su -m'
+    escalatePrivilegesCommand: 'su -m' # or sudo -s -E
   ```
 
 ### aws inventory plugin
