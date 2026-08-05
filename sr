@@ -145,7 +145,7 @@ if __name__ == "__main__":
         print(child.after.rstrip())
         child.sendline(rootPassword)
         child.expect('\r\n', timeout=rsh.config.cfg['sr']['pexpect']['timeout'])
-    elif rsh.config.cfg['sr']['escalatePrivilegesCommand'] == 'sudo -s':
+    elif re.match(r'^\s*sudo\b', rsh.config.cfg['sr']['escalatePrivilegesCommand']):
         child.expect('\r\n', timeout=rsh.config.cfg['sr']['pexpect']['timeout'])
     else:
         rsh.config.logging.error("%s: unsupported escalatePrivilegesCommand='%s'" % (defName,rsh.config.cfg['sr']['escalatePrivilegesCommand']))
