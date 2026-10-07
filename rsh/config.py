@@ -83,7 +83,10 @@ cfg = {
             'timeout': 120,
         },
         'useInventorySshHost': True, # use sshHost from inventory for connect to host
-        'escalatePrivilegesCommand': 'sudo -s -E', # variants: 'su -m', 'sudo -s', 'sudo -s -E'
+        'escalatePrivilegesCommands': [],   # commands are tried on the host in the listed order until one gives a root shell,
+                                            # e.g. ['su -m', 'sudo -s -E'];
+                                            # must stay empty here: deepmerge appends lists, so a default value would be added to the user's list
+        'escalatePrivilegesCommand': 'sudo -s -E', # deprecated, used only when 'escalatePrivilegesCommands' is empty; variants: 'su -m', 'sudo -s', 'sudo -s -E'
         'postLoginCommand': None # command will run after login, used to set up the environment
     },
 }

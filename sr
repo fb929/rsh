@@ -39,6 +39,9 @@ group.add_argument(
 args = parser.parse_args()
 # }}
 
+# matches 'Password:' (su) and '[sudo] password for user:' (sudo)
+passwordPromptRegex = r'[Pp]assword[^\r\n]*:'
+
 # defs
 def decryptFile(requestPass=False):
     defName = inspect.stack()[0][3]
@@ -83,7 +86,7 @@ def getRootPassword(host):
         if re.search(r''+hostRegex, host, re.IGNORECASE):
             return rootPasswd
 
-    rsh.config.logging.error("%s: failed get root password for host='%s', please check password file='%s'" % (defName,rsh.config.cfg['gpgFile']))
+    rsh.config.logging.error("%s: failed get root password for host='%s', please check password file='%s'" % (defName,host,rsh.config.cfg['gpgFile']))
     exit(1)
 
 def getTerminalSize():
@@ -96,9 +99,74 @@ def sigwinchPassthrough(sig, data):
     if not child.closed:
         child.setwinsize(*getTerminalSize())
 
+def getEscalatePrivilegesCommands():
+    """ return list of commands for escalate privileges, in order of trying
+    'escalatePrivilegesCommands' (list) has priority,
+    'escalatePrivilegesCommand' (string) kept for backward compatibility
+    """
+    defName = inspect.stack()[0][3]
+
+    commands = rsh.config.cfg['sr'].get('escalatePrivilegesCommands')
+    if isinstance(commands, str):
+        commands = [commands]
+    if not commands:
+        legacyCommand = rsh.config.cfg['sr'].get('escalatePrivilegesCommand')
+        if not legacyCommand:
+            rsh.config.logging.error("%s: 'sr.escalatePrivilegesCommands' is empty, nothing to try" % (defName))
+            exit(1)
+        commands = [legacyCommand]
+    return [str(command) for command in commands if command]
+
+def checkRootShell():
+    """ check that current shell on host is root shell, returns True/False """
+    global child
+    defName = inspect.stack()[0][3]
+    timeout = rsh.config.cfg['sr']['pexpect']['timeout']
+    marker = 'RSH_UID_'
+
+    child.sendline('echo %s$(id -u)' % (marker))
+    index = child.expect([
+        marker + r'(\d+)\r\n',
+        passwordPromptRegex,
+        pexpect.TIMEOUT,
+        pexpect.EOF,
+    ], timeout=timeout)
+    if index == 0:
+        uid = int(child.match.group(1))
+        rsh.config.logging.debug("%s: uid='%s'" % (defName,uid))
+        return uid == 0
+    if index == 1:
+        # the host is still asking for a password (our probe was typed into the prompt), abort it
+        rsh.config.logging.debug("%s: unexpected password prompt, aborting" % (defName))
+        child.sendcontrol('c')
+        child.expect('\r\n', timeout=timeout)
+        return False
+    rsh.config.logging.debug("%s: no answer from host, index='%s'" % (defName,index))
+    return False
+
+def escalatePrivileges(command):
+    """ try to escalate privileges with the given command, returns True/False """
+    global child, rootPassword
+    defName = inspect.stack()[0][3]
+    timeout = rsh.config.cfg['sr']['pexpect']['timeout']
+
+    child.sendline(command)
+    index = child.expect([
+        passwordPromptRegex,
+        r'\r\n',
+    ], timeout=timeout)
+    if index == 0:
+        print(child.before.rstrip())
+        print(child.after.rstrip())
+        if rootPassword is None:
+            rootPassword = getRootPassword(host=args.host)
+        child.sendline(rootPassword)
+        child.expect('\r\n', timeout=timeout)
+    return checkRootShell()
+
 if __name__ == "__main__":
     defName = "sr"
-    rootPassword = getRootPassword(host=args.host)
+    rootPassword = None # requested lazily, only when the host asks for a password
     if args.forceUseInventory:
         rsh.config.cfg['sr']['useInventorySshHost'] = True
     if args.forceDontUseInventory:
@@ -138,17 +206,16 @@ if __name__ == "__main__":
     # }}
 
     # escalate privileges {{
-    child.sendline(rsh.config.cfg['sr']['escalatePrivilegesCommand'])
-    if rsh.config.cfg['sr']['escalatePrivilegesCommand'] == 'su -m':
-        child.expect('Password:', timeout=rsh.config.cfg['sr']['pexpect']['timeout'])
-        print(child.before.rstrip())
-        print(child.after.rstrip())
-        child.sendline(rootPassword)
-        child.expect('\r\n', timeout=rsh.config.cfg['sr']['pexpect']['timeout'])
-    elif re.match(r'^\s*sudo\b', rsh.config.cfg['sr']['escalatePrivilegesCommand']):
-        child.expect('\r\n', timeout=rsh.config.cfg['sr']['pexpect']['timeout'])
-    else:
-        rsh.config.logging.error("%s: unsupported escalatePrivilegesCommand='%s'" % (defName,rsh.config.cfg['sr']['escalatePrivilegesCommand']))
+    escalated = False
+    for escalateCommand in getEscalatePrivilegesCommands():
+        rsh.config.logging.debug("%s: trying escalate privileges with command='%s'" % (defName,escalateCommand))
+        if escalatePrivileges(escalateCommand):
+            rsh.config.logging.debug("%s: escalate privileges with command='%s' succeeded" % (defName,escalateCommand))
+            escalated = True
+            break
+        rsh.config.logging.warning("%s: escalate privileges with command='%s' failed, trying next command" % (defName,escalateCommand))
+    if not escalated:
+        rsh.config.logging.error("%s: failed escalate privileges on host='%s', all commands failed: %s" % (defName,args.host,getEscalatePrivilegesCommands()))
         exit(1)
     # }}
 

@@ -25,8 +25,13 @@ pip install --user --requirement ./requirements.txt
 * configure ~/.rsh.yaml
   ```
   sr:
-    escalatePrivilegesCommand: 'su -m' # or sudo -s -E
+    escalatePrivilegesCommands:
+      - 'su -m'
+      - 'sudo -s -E'
   ```
+  commands are tried on the host in the listed order; the first one that gives a root shell wins,
+  if none of them succeeds `sr` exits with an error.
+  the old single-value option `escalatePrivilegesCommand` still works, but is used only when `escalatePrivilegesCommands` is empty
 
 ### aws inventory plugin
 * install package [aws-cli](https://github.com/aws/aws-cli)
