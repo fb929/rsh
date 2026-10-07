@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import os
 import sys
+# make the package next to this script win over any stale install (e.g. /opt/rsh),
+# resolving symlinks so launching via a symlink in PATH still finds it
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 sys.path.append('/opt/rsh')
-import rsh.config
 import argparse
+import logging
 import pexpect
 import gnupg
 import getpass
@@ -12,10 +16,12 @@ import struct
 import signal
 import fcntl
 import termios
-import inspect
 import re
-import os
-import yaml
+
+import rsh.config
+from rsh.inventory import load_inventory, resolve_ssh_host
+
+logger = logging.getLogger('sr')
 
 # parse args {{
 parser = argparse.ArgumentParser()
@@ -44,12 +50,10 @@ passwordPromptRegex = r'[Pp]assword[^\r\n]*:'
 
 # defs
 def decryptFile(requestPass=False):
-    defName = inspect.stack()[0][3]
-
     if requestPass:
         password = getpass.getpass()
         if not password:
-            rsh.config.logging.error("%s: failed get pass" % (defName))
+            logger.error("failed get pass")
             sys.exit(1)
 
     gpg = gnupg.GPG(use_agent=True)
@@ -62,33 +66,31 @@ def decryptFile(requestPass=False):
             else:
                 decryptedData = gpg.decrypt_file(cryptoInfile)
         except Exception as e:
-            rsh.config.logging.error("%s: failed decrypt data, error: '%s'" % (defName,str(e)))
+            logger.error("failed decrypt data, error: '%s'", str(e))
             sys.exit(1)
 
     if decryptedData:
         return str(decryptedData).rstrip()
     if requestPass:
-        rsh.config.logging.error("%s: 'decryptedData' is empty, please check encrypt file='%s'" % (defName,rsh.config.cfg['gpgFile']))
+        logger.error("'decryptedData' is empty, please check encrypt file='%s'", rsh.config.cfg['gpgFile'])
         sys.exit(1)
     # gpg-agent could not decrypt silently, retry asking for the passphrase
     return decryptFile(requestPass=True)
 
 def getRootPassword(host):
-    defName = inspect.stack()[0][3]
-
     decryptedData = decryptFile()
     for lineNumber, line in enumerate(decryptedData.splitlines(), 1):
         if not line.strip() or line.lstrip().startswith('#'):
             continue
         splitted = line.split('\t', 1)
         if len(splitted) != 2:
-            rsh.config.logging.warning("%s: skipping line %d of password file: expected '<host regex>\\t<password>'" % (defName,lineNumber))
+            logger.warning("skipping line %d of password file: expected '<host regex>\\t<password>'", lineNumber)
             continue
         hostRegex, rootPasswd = splitted
         if re.search(hostRegex, host, re.IGNORECASE):
             return rootPasswd
 
-    rsh.config.logging.error("%s: failed get root password for host='%s', please check password file='%s'" % (defName,host,rsh.config.cfg['gpgFile']))
+    logger.error("failed get root password for host='%s', please check password file='%s'", host,rsh.config.cfg['gpgFile'])
     sys.exit(1)
 
 def getTerminalSize():
@@ -106,15 +108,13 @@ def getEscalatePrivilegesCommands():
     'escalatePrivilegesCommands' (list) has priority,
     'escalatePrivilegesCommand' (string) kept for backward compatibility
     """
-    defName = inspect.stack()[0][3]
-
     commands = rsh.config.cfg['sr'].get('escalatePrivilegesCommands')
     if isinstance(commands, str):
         commands = [commands]
     if not commands:
         legacyCommand = rsh.config.cfg['sr'].get('escalatePrivilegesCommand')
         if not legacyCommand:
-            rsh.config.logging.error("%s: 'sr.escalatePrivilegesCommands' is empty, nothing to try" % (defName))
+            logger.error("'sr.escalatePrivilegesCommands' is empty, nothing to try")
             sys.exit(1)
         commands = [legacyCommand]
     return [str(command) for command in commands if command]
@@ -122,7 +122,6 @@ def getEscalatePrivilegesCommands():
 def checkRootShell():
     """ check that current shell on host is root shell, returns True/False """
     global child
-    defName = inspect.stack()[0][3]
     timeout = rsh.config.cfg['sr']['pexpect']['timeout']
     marker = 'RSH_UID_'
 
@@ -135,21 +134,20 @@ def checkRootShell():
     ], timeout=timeout)
     if index == 0:
         uid = int(child.match.group(1))
-        rsh.config.logging.debug("%s: uid='%s'" % (defName,uid))
+        logger.debug("uid='%s'", uid)
         return uid == 0
     if index == 1:
         # the host is still asking for a password (our probe was typed into the prompt), abort it
-        rsh.config.logging.debug("%s: unexpected password prompt, aborting" % (defName))
+        logger.debug("unexpected password prompt, aborting")
         child.sendcontrol('c')
         child.expect('\r\n', timeout=timeout)
         return False
-    rsh.config.logging.debug("%s: no answer from host, index='%s'" % (defName,index))
+    logger.debug("no answer from host, index='%s'", index)
     return False
 
 def escalatePrivileges(command):
     """ try to escalate privileges with the given command, returns True/False """
     global child, rootPassword
-    defName = inspect.stack()[0][3]
     timeout = rsh.config.cfg['sr']['pexpect']['timeout']
 
     child.sendline(command)
@@ -167,29 +165,14 @@ def escalatePrivileges(command):
     return checkRootShell()
 
 if __name__ == "__main__":
-    defName = "sr"
     rootPassword = None # requested lazily, only when the host asks for a password
     if args.forceUseInventory:
         rsh.config.cfg['sr']['useInventorySshHost'] = True
     if args.forceDontUseInventory:
         rsh.config.cfg['sr']['useInventorySshHost'] = False
     if rsh.config.cfg['sr']['useInventorySshHost']:
-        inventory = dict()
-        try:
-            with open(os.path.expanduser(rsh.config.cfg['inventoryFilePath']), 'r') as ymlfile:
-                inventory.update(yaml.load(ymlfile,Loader=yaml.Loader))
-        except Exception as e:
-            rsh.config.logging.error("%s: failed inventory from file: '%s', error: '%s'" % (defName,rsh.config.cfg['inventoryFilePath'],e))
-            sys.exit(1)
-        inventoryHost = inventory['hosts'].get(args.host, None)
-        if inventoryHost:
-            sshHost = inventory['hosts'][args.host].get('sshHost', None)
-        else:
-            rsh.config.logging.warning("%s: host='%s' not found in inventory file='%s'" % (defName,args.host,rsh.config.cfg['inventoryFilePath']))
-            sshHost = args.host
-        if sshHost == None:
-            rsh.config.logging.error("%s: unexpected error 'sshHost'='%s'" % (defName,sshHost))
-            sys.exit(1)
+        inventory = load_inventory(rsh.config.cfg)
+        sshHost = resolve_ssh_host(args.host, inventory, rsh.config.cfg['inventoryFilePath'])
     else:
         sshHost = args.host
 
@@ -210,14 +193,14 @@ if __name__ == "__main__":
     # escalate privileges {{
     escalated = False
     for escalateCommand in getEscalatePrivilegesCommands():
-        rsh.config.logging.debug("%s: trying escalate privileges with command='%s'" % (defName,escalateCommand))
+        logger.debug("trying escalate privileges with command='%s'", escalateCommand)
         if escalatePrivileges(escalateCommand):
-            rsh.config.logging.debug("%s: escalate privileges with command='%s' succeeded" % (defName,escalateCommand))
+            logger.debug("escalate privileges with command='%s' succeeded", escalateCommand)
             escalated = True
             break
-        rsh.config.logging.warning("%s: escalate privileges with command='%s' failed, trying next command" % (defName,escalateCommand))
+        logger.warning("escalate privileges with command='%s' failed, trying next command", escalateCommand)
     if not escalated:
-        rsh.config.logging.error("%s: failed escalate privileges on host='%s', all commands failed: %s" % (defName,args.host,getEscalatePrivilegesCommands()))
+        logger.error("failed escalate privileges on host='%s', all commands failed: %s", args.host,getEscalatePrivilegesCommands())
         sys.exit(1)
     # }}
 

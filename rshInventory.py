@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import os
 import sys
+# make the package next to this script win over any stale install (e.g. /opt/rsh),
+# resolving symlinks so launching via a symlink in PATH still finds it
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 sys.path.append('/opt/rsh')
 import rsh
 import rsh.config
 import logging
 import json
-import inspect
 import re
 import os
 import yaml
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('rshInventory')
 
 # natural sort helper:
 # - split by non-alphanumeric
@@ -34,8 +37,7 @@ def _natsort_tokens_key(host):
     return tokens
 
 if __name__ == "__main__":
-    defName = "main"
-    logger.debug("%s: cfg='%s'" % (defName,json.dumps(rsh.config.cfg,indent=4)))
+    logger.debug("cfg='%s'", json.dumps(rsh.config.cfg,indent=4))
 
     instancesInfoArray = list()
     # inventory plugins
@@ -51,7 +53,7 @@ if __name__ == "__main__":
                 # generate inventory dict
                 instancesInfoArray.extend(inventoryClass.instancesInfo())
 
-    logger.debug("%s: instancesInfoArray='%s'" % (defName,json.dumps(instancesInfoArray,indent=4)))
+    logger.debug("instancesInfoArray='%s'", json.dumps(instancesInfoArray,indent=4))
 
     inventory = dict()
     inventory['hosts'] = dict()
@@ -61,7 +63,7 @@ if __name__ == "__main__":
         try:
             host = instanceInfo['host']
         except KeyError:
-            logger.error(f"{defName}: key='host' not found in instanceInfo='{instanceInfo}'")
+            logger.error(f"key='host' not found in instanceInfo='{instanceInfo}'")
             sys.exit(1)
 
         # get rsh inventory module name {{
@@ -108,7 +110,7 @@ if __name__ == "__main__":
     # }}
 
     # generating inventory file {{
-    logger.debug("%s: inventory='%s'" % (defName,inventory))
+    logger.debug("inventory='%s'", inventory)
     with open(os.path.expanduser(rsh.config.cfg['inventoryFilePath']), 'w') as f:
         yaml.dump(inventory, f, default_flow_style=False, sort_keys=False)
     # }}

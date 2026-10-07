@@ -2,9 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import sys
-sys.path.append('/opt/rsh')
-import rsh.config
-import inspect
 import re
 import os
 import yaml
@@ -24,12 +21,10 @@ class awsInventory(
         return info for instances from one region
         """
 
-        defName = inspect.stack()[0][3]
-
         instancesInfo = list()
         result = self.runCmd("aws ec2 --region %s describe-instances" % region)
         if result is None:
-            self.logger.error(f"{defName}: failed get instances for region='{region}'")
+            self.logger.error(f"failed get instances for region='{region}'")
             sys.exit(1)
         reservations = result['stdout']['Reservations']
         for reservation in reservations:
@@ -41,7 +36,7 @@ class awsInventory(
                 try:
                     dc = instance['Placement']['AvailabilityZone']
                 except KeyError:
-                    self.logger.error(f"{defName}: failed get Placement.AvailabilityZone from instance={instance}")
+                    self.logger.error(f"failed get Placement.AvailabilityZone from instance={instance}")
                     sys.exit(1)
                 tags = instance.get('Tags', []) # tags is optional
                 info = {
@@ -52,7 +47,7 @@ class awsInventory(
                     if tag['Key'] == 'Name':
                         info['host'] = tag['Value']
                 if 'host' not in info:
-                    self.logger.warning(f"{defName}: skipping instance id='{instance.get('InstanceId')}' without 'Name' tag")
+                    self.logger.warning(f"skipping instance id='{instance.get('InstanceId')}' without 'Name' tag")
                     continue
 
                 if self.cfg['awsInventory']['nameSuffix']:
@@ -111,17 +106,15 @@ class awsInventory(
         ]
         """
 
-        defName = inspect.stack()[0][3]
-
         if self.cfg['awsInventory']['regions']:
             regions = self.cfg['awsInventory']['regions']
         else:
             result = self.runCmd("aws ec2 describe-regions --query 'Regions[].RegionName'")
             if result is None:
-                self.logger.error(f"{defName}: failed get regions list")
+                self.logger.error("failed get regions list")
                 sys.exit(1)
             regions = result['stdout']
-        self.logger.debug("%s: regions='%s'" % (defName,regions))
+        self.logger.debug("regions='%s'", regions)
         instancesInfoArray = list()
         for region in regions:
             instancesInfoArray = instancesInfoArray + self.regionInstancesInfo(region)

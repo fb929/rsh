@@ -7,7 +7,6 @@ import sys
 import yaml
 import re
 import logging
-import inspect
 from deepmerge import always_merger
 
 programName = 'rsh'
@@ -156,33 +155,25 @@ def getRecursively(searchDict,fields):
                         for another_result in more_results:
                             fieldsFound.append(another_result)
     return fieldsFound
-sensitiveValues = getRecursively(cfg, cfg['sensitiveKeys'])
+sensitiveValues = [str(value) for value in getRecursively(cfg, cfg['sensitiveKeys']) if value]
+sensitivePattern = re.compile('|'.join(re.escape(value) for value in sensitiveValues)) if sensitiveValues else None
 class SensitiveFormatter(logging.Formatter):
-    """Formatter that removes sensitive information in urls."""
-    @staticmethod
-    def _filter(s):
-        pattern = re.compile('|'.join(sensitiveValues))
-        return pattern.sub('[CLASSIFIED]', s)
-
+    """Formatter that masks sensitive config values (api keys etc.) in log output."""
     def format(self, record):
         original = logging.Formatter.format(self, record)
-        return self._filter(original)
+        if sensitivePattern is None:
+            return original
+        return sensitivePattern.sub('[CLASSIFIED]', original)
 # }}
 
 # configure log format {{
+# %(funcName)s replaces the manual "defName: ..." prefix in messages
+logFormat = '%(asctime)s\t%(name)s\t%(funcName)s\t%(levelname)s\t%(message)s'
+logDateFormat = '%Y-%m-%dT%H:%M:%S'
 if cfg['logFile'] == 'stdout':
-    logging.basicConfig(
-        level       = logLevel,
-        format      = '%(asctime)s\t%(name)s\t%(levelname)s\t%(message)s',
-        datefmt     = '%Y-%m-%dT%H:%M:%S',
-    )
+    logging.basicConfig(level=logLevel, format=logFormat, datefmt=logDateFormat)
 else:
-    logging.basicConfig(
-        filename    = cfg['logFile'],
-        level       = logLevel,
-        format      = '%(asctime)s\t%(name)s\t%(levelname)s\t%(message)s',
-        datefmt     = '%Y-%m-%dT%H:%M:%S',
-    )
+    logging.basicConfig(filename=cfg['logFile'], level=logLevel, format=logFormat, datefmt=logDateFormat)
 for handler in logging.root.handlers:
-   handler.setFormatter(SensitiveFormatter('%(asctime)s\t%(name)s\t%(levelname)s\t%(message)s'))
+    handler.setFormatter(SensitiveFormatter(logFormat, datefmt=logDateFormat))
 # }}

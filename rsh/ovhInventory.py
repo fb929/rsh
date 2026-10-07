@@ -2,10 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import sys
-sys.path.append('/opt/rsh')
-import rsh.config
 import json
-import inspect
 import re
 import os
 import yaml
@@ -36,8 +33,6 @@ class ovhInventory():
         ]
         """
 
-        defName = inspect.stack()[0][3]
-
         client = ovh.Client(
             endpoint=self.cfg['ovhInventory']['api']['endpoint'],
             application_key=self.cfg['ovhInventory']['api']['application_key'],
@@ -52,9 +47,9 @@ class ovhInventory():
             info = dict()
             dedicatedServerServiceInfos = client.get(f'/dedicated/server/{dedicatedServer}/serviceInfos')
             servicesInfo = client.get('/services/%s' % dedicatedServerServiceInfos['serviceId'])
-            self.logger.debug("%s: servicesInfo='%s'" % (defName, json.dumps(servicesInfo,indent=4)))
+            self.logger.debug("servicesInfo='%s'", json.dumps(servicesInfo,indent=4))
             dedicatedServerInfo = client.get(f'/dedicated/server/{dedicatedServer}')
-            self.logger.debug("%s: dedicatedServerInfo='%s'" % (defName, json.dumps(dedicatedServerInfo,indent=4)))
+            self.logger.debug("dedicatedServerInfo='%s'", json.dumps(dedicatedServerInfo,indent=4))
             if dedicatedServerInfo['availabilityZone'] == 'unknown':
                 dc = dedicatedServerInfo['datacenter']
             else:

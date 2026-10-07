@@ -2,8 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import sys
-sys.path.append('/opt/rsh')
-import inspect
 import logging
 import json
 import re
@@ -44,12 +42,10 @@ class gceInventory(
         ]
         """
 
-        defName = inspect.stack()[0][3]
-
         instancesInfoArray = list()
         result = self.runCmd("gcloud compute instances list --format=json")
         if result is None:
-            self.logger.error(f"{defName}: failed get instances list")
+            self.logger.error("failed get instances list")
             sys.exit(1)
         for describeInstance in result['stdout']:
             name = describeInstance['name']
@@ -59,7 +55,7 @@ class gceInventory(
             status = describeInstance['status']
             if self.cfg['gceInventory']['skipNotRunningInstance']:
                 if status != 'RUNNING':
-                    self.logger.debug(f"{defName}: skipping instance name='{name}', because its status is not 'RUNNING'")
+                    self.logger.debug(f"skipping instance name='{name}', because its status is not 'RUNNING'")
                     continue
             zone = describeInstance['zone']
             dc = zone.split('/')[-1]
@@ -71,13 +67,13 @@ class gceInventory(
             tags = list()
             for item in describeInstance.get('metadata', {}).get('items', []):
                 if item['key'] == 'startup-script':
-                    self.logger.debug(f"{defName}: skipping item key='{item['key']}', because it's startup-script")
+                    self.logger.debug(f"skipping item key='{item['key']}', because it's startup-script")
                     continue
                 elif not re.fullmatch(r"[A-Za-z0-9_-]+", item['key']):
-                    self.logger.debug(f"{defName}: skipping item key='{item['key']}', because 'key' does not match a simple string")
+                    self.logger.debug(f"skipping item key='{item['key']}', because 'key' does not match a simple string")
                     continue
                 elif not re.fullmatch(r"[A-Za-z0-9_-]+", item['value']):
-                    self.logger.debug(f"{defName}: skipping item key='{item['key']}', because 'value' does not match a simple string")
+                    self.logger.debug(f"skipping item key='{item['key']}', because 'value' does not match a simple string")
                     continue
                 else:
                     tags.append({ "Key": item['key'], "Value": item['value'] })

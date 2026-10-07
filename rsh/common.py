@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import inspect
 import logging
 import subprocess
 import json
@@ -18,8 +17,7 @@ class CommonMixin:
         }
         """
 
-        defName = inspect.stack()[0][3]
-        self.logger.debug("%s: '%s'" % (defName,commands))
+        self.logger.debug("'%s'", commands)
         if communicate:
             process = subprocess.Popen('/bin/bash', stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
             out, err = process.communicate(commands.encode())
@@ -32,7 +30,7 @@ class CommonMixin:
                 try:
                     stdout = json.loads(outFormatted)
                 except Exception:
-                    self.logger.error("%s: failed parse JSON from cmd='%s', exitCode=%s, stderr='%s', error='%s'" % (defName,commands,returnCode,err.decode("utf-8", "replace").rstrip(),traceback.format_exc()))
+                    self.logger.error("failed parse JSON from cmd='%s', exitCode=%s, stderr='%s', error='%s'", commands,returnCode,err.decode("utf-8", "replace").rstrip(),traceback.format_exc())
                     return None
             else:
                 stdout = outFormatted

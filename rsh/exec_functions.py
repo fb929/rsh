@@ -2,7 +2,6 @@
 
 import sys
 import os
-import yaml
 import json
 import argparse
 import time
@@ -10,7 +9,9 @@ import logging
 from braceexpand import braceexpand
 from fabric import Connection
 import rsh.config
+from rsh.inventory import load_inventory as _load_inventory, resolve_hosts as _resolve_hosts
 
+logger = logging.getLogger(__name__)
 logging.getLogger("paramiko").setLevel(logging.WARNING)
 
 
@@ -69,26 +70,13 @@ def parse_arguments():
 
 
 def load_inventory():
-    """Load inventory file defined in rsh.config.cfg."""
-    try:
-        with open(os.path.expanduser(rsh.config.cfg['inventoryFilePath']), 'r') as f:
-            return yaml.load(f, Loader=yaml.Loader)
-    except Exception as e:
-        rsh.config.logging.error(f"Failed to load inventory: {e}")
-        sys.exit(1)
+    """Load inventory file defined in rsh.config.cfg (see rsh.inventory)."""
+    return _load_inventory(rsh.config.cfg)
 
 
 def resolve_hosts(hosts_or_groups, inventory):
-    """Resolve group names to actual hostnames."""
-    hosts = []
-    for item in hosts_or_groups:
-        group_hosts = inventory.get('groups', {}).get(item)
-        if group_hosts:
-            for host in group_hosts:
-                hosts.append(inventory.get('hosts', {}).get(host, {}).get('sshHost', host))
-        else:
-            hosts.append(item)
-    return hosts
+    """Resolve group names to ssh addresses (see rsh.inventory)."""
+    return _resolve_hosts(hosts_or_groups, inventory)
 
 
 def run_command_sequential(hosts, command, delay=0.0):
@@ -96,9 +84,9 @@ def run_command_sequential(hosts, command, delay=0.0):
     Run a command sequentially on each host, streaming stdout/stderr immediately.
     Parameter `delay` adds a pause (in seconds) between hosts.
     """
-    rsh.config.logging.debug(f"hosts={json.dumps(hosts)}")
-    rsh.config.logging.debug(f"command='{command}'")
-    rsh.config.logging.debug(f"delay={delay}")
+    logger.debug(f"hosts={json.dumps(hosts)}")
+    logger.debug(f"command='{command}'")
+    logger.debug(f"delay={delay}")
 
     for idx, host in enumerate(hosts, 1):
         header = f"[{host}] ({idx}/{len(hosts)})"
@@ -109,7 +97,7 @@ def run_command_sequential(hosts, command, delay=0.0):
             result = conn.sudo(command, pty=True, hide=False, warn=True)
             print(f"\n[{host}] exit status: {result.return_code}")
         except Exception as e:
-            rsh.config.logging.error(f"[{host}] Command execution failed: {e}")
+            logger.error(f"[{host}] Command execution failed: {e}")
             print(f"[{host}] ERROR: {e}")
         finally:
             if len(hosts) > 1:
@@ -129,8 +117,8 @@ def run_command_parallel_dedup(GroupClass, hosts, command):
     Run a command in parallel across hosts and deduplicate identical outputs.
     Prints each unique output once alongside the list of hosts that produced it.
     """
-    rsh.config.logging.debug(f"hosts={json.dumps(hosts)}")
-    rsh.config.logging.debug(f"command='{command}'")
+    logger.debug(f"hosts={json.dumps(hosts)}")
+    logger.debug(f"command='{command}'")
 
     try:
         group = GroupClass(*hosts)
@@ -167,7 +155,7 @@ def run_command_parallel_dedup(GroupClass, hosts, command):
     except Exception as e:
         try:
             for i in e:
-                rsh.config.logging.error(f"Command execution failed: {i}")
+                logger.error(f"Command execution failed: {i}")
         except Exception:
-            rsh.config.logging.error(f"Command execution failed: {e}")
+            logger.error(f"Command execution failed: {e}")
         sys.exit(1)
