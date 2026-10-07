@@ -27,8 +27,11 @@ class awsInventory(
         defName = inspect.stack()[0][3]
 
         instancesInfo = list()
-        describeInstances = self.runCmd("aws ec2 --region %s describe-instances" % region)['stdout']
-        reservations = describeInstances['Reservations']
+        result = self.runCmd("aws ec2 --region %s describe-instances" % region)
+        if result is None:
+            self.logger.error(f"{defName}: failed get instances for region='{region}'")
+            sys.exit(1)
+        reservations = result['stdout']['Reservations']
         for reservation in reservations:
             instances = reservation['Instances']
             for instance in instances:
@@ -37,9 +40,9 @@ class awsInventory(
                         continue
                 try:
                     dc = instance['Placement']['AvailabilityZone']
-                except:
+                except KeyError:
                     self.logger.error(f"{defName}: failed get Placement.AvailabilityZone from instance={instance}")
-                    exit(1)
+                    sys.exit(1)
                 tags = instance.get('Tags', []) # tags is optional
                 info = {
                     'dc': dc,
@@ -48,6 +51,9 @@ class awsInventory(
                 for tag in tags:
                     if tag['Key'] == 'Name':
                         info['host'] = tag['Value']
+                if 'host' not in info:
+                    self.logger.warning(f"{defName}: skipping instance id='{instance.get('InstanceId')}' without 'Name' tag")
+                    continue
 
                 if self.cfg['awsInventory']['nameSuffix']:
                     # set name suffix if need
@@ -110,7 +116,11 @@ class awsInventory(
         if self.cfg['awsInventory']['regions']:
             regions = self.cfg['awsInventory']['regions']
         else:
-            regions = self.runCmd("aws ec2 describe-regions --query 'Regions[].RegionName'")['stdout']
+            result = self.runCmd("aws ec2 describe-regions --query 'Regions[].RegionName'")
+            if result is None:
+                self.logger.error(f"{defName}: failed get regions list")
+                sys.exit(1)
+            regions = result['stdout']
         self.logger.debug("%s: regions='%s'" % (defName,regions))
         instancesInfoArray = list()
         for region in regions:

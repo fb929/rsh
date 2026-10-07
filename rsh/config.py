@@ -69,11 +69,10 @@ cfg = {
             'PublicIpAddress',
             'dc',
         ],
-        'skipTagsForMakeGroups': [],        # these tag 'key' will skip when creating groups
         'skipTagsForMakeGroups': [          # these tag 'key' will skip when creating groups
             'name',
         ],
-        'nameSuffix': '.gc',                # suffix for instance names
+        'nameSuffix': '.gc',               # suffix for instance names
     },
     'sr': {
         'ssh': {
@@ -96,13 +95,14 @@ for configFile in defaultConfigFiles:
     if os.path.isfile(configFile):
         try:
             with open(configFile, 'r') as ymlfile:
-                try:
-                    cfg = always_merger.merge(cfg,yaml.load(ymlfile,Loader=yaml.Loader))
-                except Exception as e:
-                    logging.warning("main: skipping load load config file: '%s', error '%s'", configFile, e)
-                    continue
-        except:
+                loaded = yaml.load(ymlfile,Loader=yaml.Loader)
+        except Exception as e:
+            logging.warning("main: skipping config file: '%s', error '%s'", configFile, e)
             continue
+        if not isinstance(loaded, dict):
+            logging.warning("main: skipping config file: '%s', top level is not a mapping", configFile)
+            continue
+        cfg = always_merger.merge(cfg,loaded)
 
 # fix logDir
 cfg['logDir'] = os.path.dirname(cfg['logFile'])

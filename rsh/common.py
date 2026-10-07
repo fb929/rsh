@@ -32,7 +32,7 @@ class CommonMixin:
                 try:
                     stdout = json.loads(outFormatted)
                 except Exception:
-                    self.logger.logging.error("%s: failed runCmd, cmd='%s', error='%s'" % (defName,commands,traceback.format_exc()))
+                    self.logger.error("%s: failed parse JSON from cmd='%s', exitCode=%s, stderr='%s', error='%s'" % (defName,commands,returnCode,err.decode("utf-8", "replace").rstrip(),traceback.format_exc()))
                     return None
             else:
                 stdout = outFormatted

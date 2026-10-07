@@ -11,7 +11,6 @@ import inspect
 import re
 import os
 import yaml
-import ovh
 
 logger = logging.getLogger(__name__)
 
@@ -61,10 +60,9 @@ if __name__ == "__main__":
         # hosts {{
         try:
             host = instanceInfo['host']
-        except:
-            print(instanceInfo)
+        except KeyError:
             logger.error(f"{defName}: key='host' not found in instanceInfo='{instanceInfo}'")
-            exit(1)
+            sys.exit(1)
 
         # get rsh inventory module name {{
         rshInventoryModule = instanceInfo.get('rshInventoryModule', None)

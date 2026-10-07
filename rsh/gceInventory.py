@@ -47,8 +47,11 @@ class gceInventory(
         defName = inspect.stack()[0][3]
 
         instancesInfoArray = list()
-        describeInstances = self.runCmd("gcloud compute instances list --format=json")['stdout']
-        for describeInstance in describeInstances:
+        result = self.runCmd("gcloud compute instances list --format=json")
+        if result is None:
+            self.logger.error(f"{defName}: failed get instances list")
+            sys.exit(1)
+        for describeInstance in result['stdout']:
             name = describeInstance['name']
             if self.cfg['gceInventory']['nameSuffix']:
                 # set name suffix if need
@@ -60,10 +63,13 @@ class gceInventory(
                     continue
             zone = describeInstance['zone']
             dc = zone.split('/')[-1]
-            PrivateIpAddress = describeInstance['networkInterfaces'][0]['networkIP']
-            PublicIpAddress = describeInstance['networkInterfaces'][0]['accessConfigs'][0]['natIP']
+            networkInterface = describeInstance['networkInterfaces'][0]
+            PrivateIpAddress = networkInterface['networkIP']
+            # instance without external IP has no accessConfigs / natIP
+            accessConfigs = networkInterface.get('accessConfigs') or [{}]
+            PublicIpAddress = accessConfigs[0].get('natIP', 'unknown')
             tags = list()
-            for item in describeInstance['metadata']['items']:
+            for item in describeInstance.get('metadata', {}).get('items', []):
                 if item['key'] == 'startup-script':
                     self.logger.debug(f"{defName}: skipping item key='{item['key']}', because it's startup-script")
                     continue

@@ -50,7 +50,7 @@ def decryptFile(requestPass=False):
         password = getpass.getpass()
         if not password:
             rsh.config.logging.error("%s: failed get pass" % (defName))
-            exit(1)
+            sys.exit(1)
 
     gpg = gnupg.GPG(use_agent=True)
     gpg.encoding = 'utf-8'
@@ -63,31 +63,33 @@ def decryptFile(requestPass=False):
                 decryptedData = gpg.decrypt_file(cryptoInfile)
         except Exception as e:
             rsh.config.logging.error("%s: failed decrypt data, error: '%s'" % (defName,str(e)))
-            exit(1)
+            sys.exit(1)
 
     if decryptedData:
         return str(decryptedData).rstrip()
-    else:
-        if requestPass:
-            rsh.config.logging.error("%s: 'decryptedData' is empty, please check encrypt file='%s'" % (defName,rsh.config.cfg['gpgFile']))
-            exit(1)
-        else:
-            # retry with request password
-            decryptFile(requestPass=True)
+    if requestPass:
+        rsh.config.logging.error("%s: 'decryptedData' is empty, please check encrypt file='%s'" % (defName,rsh.config.cfg['gpgFile']))
+        sys.exit(1)
+    # gpg-agent could not decrypt silently, retry asking for the passphrase
+    return decryptFile(requestPass=True)
 
 def getRootPassword(host):
     defName = inspect.stack()[0][3]
 
     decryptedData = decryptFile()
-    for line in decryptedData.splitlines():
-        splitted = line.split('\t')
-        hostRegex = splitted[0]
-        rootPasswd = splitted[1]
-        if re.search(r''+hostRegex, host, re.IGNORECASE):
+    for lineNumber, line in enumerate(decryptedData.splitlines(), 1):
+        if not line.strip() or line.lstrip().startswith('#'):
+            continue
+        splitted = line.split('\t', 1)
+        if len(splitted) != 2:
+            rsh.config.logging.warning("%s: skipping line %d of password file: expected '<host regex>\\t<password>'" % (defName,lineNumber))
+            continue
+        hostRegex, rootPasswd = splitted
+        if re.search(hostRegex, host, re.IGNORECASE):
             return rootPasswd
 
     rsh.config.logging.error("%s: failed get root password for host='%s', please check password file='%s'" % (defName,host,rsh.config.cfg['gpgFile']))
-    exit(1)
+    sys.exit(1)
 
 def getTerminalSize():
     s = struct.pack("HHHH", 0, 0, 0, 0)
@@ -113,7 +115,7 @@ def getEscalatePrivilegesCommands():
         legacyCommand = rsh.config.cfg['sr'].get('escalatePrivilegesCommand')
         if not legacyCommand:
             rsh.config.logging.error("%s: 'sr.escalatePrivilegesCommands' is empty, nothing to try" % (defName))
-            exit(1)
+            sys.exit(1)
         commands = [legacyCommand]
     return [str(command) for command in commands if command]
 
@@ -178,7 +180,7 @@ if __name__ == "__main__":
                 inventory.update(yaml.load(ymlfile,Loader=yaml.Loader))
         except Exception as e:
             rsh.config.logging.error("%s: failed inventory from file: '%s', error: '%s'" % (defName,rsh.config.cfg['inventoryFilePath'],e))
-            exit(1)
+            sys.exit(1)
         inventoryHost = inventory['hosts'].get(args.host, None)
         if inventoryHost:
             sshHost = inventory['hosts'][args.host].get('sshHost', None)
@@ -187,7 +189,7 @@ if __name__ == "__main__":
             sshHost = args.host
         if sshHost == None:
             rsh.config.logging.error("%s: unexpected error 'sshHost'='%s'" % (defName,sshHost))
-            exit(1)
+            sys.exit(1)
     else:
         sshHost = args.host
 
@@ -216,7 +218,7 @@ if __name__ == "__main__":
         rsh.config.logging.warning("%s: escalate privileges with command='%s' failed, trying next command" % (defName,escalateCommand))
     if not escalated:
         rsh.config.logging.error("%s: failed escalate privileges on host='%s', all commands failed: %s" % (defName,args.host,getEscalatePrivilegesCommands()))
-        exit(1)
+        sys.exit(1)
     # }}
 
     # translation into interactive

@@ -67,8 +67,6 @@ class ovhInventory():
             }
             for hostInfoField in self.cfg['ovhInventory']['hostInfoFields']:
                 info[hostInfoField] = infoMap.get(hostInfoField, 'unknown')
-            if info not in instancesInfo:
-                instancesInfo.append(info)
 
             # ovh don't have tags
             info['tags'] = []
@@ -81,5 +79,9 @@ class ovhInventory():
 
             # set sshHost
             info['sshHost'] = info.get(self.cfg['ovhInventory']['sshHostField'], 'unknown')
+
+            # deduplicate only after the record is complete
+            if info not in instancesInfo:
+                instancesInfo.append(info)
 
         return instancesInfo
