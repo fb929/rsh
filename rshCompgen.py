@@ -3,19 +3,19 @@
 
 import sys
 sys.path.append('/opt/rsh')
-import rsh.config
-import yaml
-import json
-import os
+import logging
 
-from rsh import exec_functions
+import rsh.config
+from rsh.inventory import load_inventory
+
+logger = logging.getLogger('rshCompgen')
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        rsh.config.logging.error("An argument is required ('hosts' or 'groups').")
+        logger.error("An argument is required ('hosts' or 'groups').")
         sys.exit(1)
 
-    inventory = exec_functions.load_inventory()
+    inventory = load_inventory(rsh.config.cfg)
 
     arg = sys.argv[1]
     if arg == "hosts":
@@ -25,5 +25,5 @@ if __name__ == "__main__":
         groups = list(inventory['groups'].keys())
         print(' '.join(groups))
     else:
-        rsh.config.logging.error(f"Unsupported argument '{arg}'. Only 'hosts' or 'groups' are allowed.")
+        logger.error(f"Unsupported argument '{arg}'. Only 'hosts' or 'groups' are allowed.")
         sys.exit(1)

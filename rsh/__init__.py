@@ -1,3 +1,3 @@
-from rsh.awsInventory import awsInventory
-from rsh.ovhInventory import ovhInventory
-from rsh.gceInventory import gceInventory
+"""rsh - ssh helpers: sr (root shell), sExec/pExec (run a command on hosts), inventory plugins."""
+
+__version__ = '3.0.1'

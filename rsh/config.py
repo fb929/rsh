@@ -7,22 +7,21 @@ import sys
 import yaml
 import re
 import logging
-import inspect
 from deepmerge import always_merger
 
-programName = 'rsh'
-homeDir = expanduser("~")
-defaultConfigFiles = [
-    '/etc/' + programName + '/config.yaml',
-    homeDir + '/.' + programName + '.yaml',
+PROGRAM_NAME = 'rsh'
+HOME_DIR = expanduser("~")
+DEFAULT_CONFIG_FILES = [
+    '/etc/' + PROGRAM_NAME + '/config.yaml',
+    HOME_DIR + '/.' + PROGRAM_NAME + '.yaml',
     './.config.yaml',
 ]
 cfg = {
-    #'logFile': homeDir + '/log/' + programName + '/' + programName + '.log',
+    #'logFile': HOME_DIR + '/log/' + PROGRAM_NAME + '/' + PROGRAM_NAME + '.log',
     'logFile': 'stdout',
     'logLevel': 'info',
-    'gpgFile': homeDir + '/.pass.gpg',
-    'inventoryFilePath': homeDir + '/inventory.yaml',
+    'gpgFile': HOME_DIR + '/.pass.gpg',
+    'inventoryFilePath': HOME_DIR + '/inventory.yaml',
     'sensitiveKeys': [
         'application_key',
         'application_secret',
@@ -69,11 +68,10 @@ cfg = {
             'PublicIpAddress',
             'dc',
         ],
-        'skipTagsForMakeGroups': [],        # these tag 'key' will skip when creating groups
         'skipTagsForMakeGroups': [          # these tag 'key' will skip when creating groups
             'name',
         ],
-        'nameSuffix': '.gc',                # suffix for instance names
+        'nameSuffix': '.gc',               # suffix for instance names
     },
     'sr': {
         'ssh': {
@@ -83,103 +81,94 @@ cfg = {
             'timeout': 120,
         },
         'useInventorySshHost': True, # use sshHost from inventory for connect to host
-        'escalatePrivilegesCommand': 'sudo -s -E', # variants: 'su -m', 'sudo -s', 'sudo -s -E'
+        'escalatePrivilegesCommands': [],   # commands are tried on the host in the listed order until one gives a root shell,
+                                            # e.g. ['su -m', 'sudo -s -E'];
+                                            # must stay empty here: deepmerge appends lists, so a default value would be added to the user's list
+        'escalatePrivilegesCommand': 'sudo -s -E', # deprecated, used only when 'escalatePrivilegesCommands' is empty; variants: 'su -m', 'sudo -s', 'sudo -s -E'
         'postLoginCommand': None # command will run after login, used to set up the environment
     },
 }
 
-# get settings
-for configFile in defaultConfigFiles:
-    if os.path.isfile(configFile):
-        try:
-            with open(configFile, 'r') as ymlfile:
-                try:
-                    cfg = always_merger.merge(cfg,yaml.load(ymlfile,Loader=yaml.Loader))
-                except Exception as e:
-                    logging.warning("main: skipping load load config file: '%s', error '%s'", configFile, e)
-                    continue
-        except:
+# load config files {{
+def load_config_files(cfg, paths):
+    """Deep-merge every existing YAML mapping from paths into cfg, in order."""
+    for path in paths:
+        if not os.path.isfile(path):
             continue
+        try:
+            with open(path, 'r') as f:
+                loaded = yaml.load(f, Loader=yaml.Loader)
+        except Exception as e:
+            logging.warning("skipping config file '%s': %s", path, e)
+            continue
+        if not isinstance(loaded, dict):
+            logging.warning("skipping config file '%s': top level is not a mapping", path)
+            continue
+        cfg = always_merger.merge(cfg, loaded)
+    return cfg
 
-# fix logDir
-cfg['logDir'] = os.path.dirname(cfg['logFile'])
-if cfg['logDir'] == '':
-    cfg['logDir'] = '.'
+cfg = load_config_files(cfg, DEFAULT_CONFIG_FILES)
+cfg['logDir'] = os.path.dirname(cfg['logFile']) or '.'
 # }}
 
-# basic config {{
-for dirPath in [
-    cfg['logDir'],
-]:
-    try:
-        os.makedirs(dirPath)
-    except OSError:
-        if not os.path.isdir(dirPath):
-            raise
+# logging {{
+def parse_log_level(name):
+    if re.match(r"^(warn|warning)$", str(name), re.IGNORECASE):
+        return logging.WARNING
+    if re.match(r"^debug$", str(name), re.IGNORECASE):
+        return logging.DEBUG
+    return logging.INFO
 
-# choice logLevel
-if re.match(r"^(warn|warning)$", cfg['logLevel'], re.IGNORECASE):
-    logLevel = logging.WARNING
-elif re.match(r"^debug$", cfg['logLevel'], re.IGNORECASE):
-    logLevel = logging.DEBUG
-else:
-    logging.getLogger("urllib3").setLevel(logging.WARNING)
-    logging.getLogger("requests").setLevel(logging.WARNING)
-    logLevel = logging.INFO
-# }}
 
-# sensitive data {{
-def getRecursively(searchDict,fields):
-    """
-    Takes a dict with nested lists and dicts,
-    and searches all dicts for a key of the field
-    provided.
-    """
-    if isinstance(fields, str):
-        fields = [fields]
-    fieldsFound = []
-    for field in fields:
-        for key, value in searchDict.items():
-            if key == field:
-                fieldsFound.append(value)
-            elif isinstance(value, dict):
-                results = getRecursively(value, field)
-                for result in results:
-                    fieldsFound.append(result)
-            elif isinstance(value, list):
-                for item in value:
-                    if isinstance(item, dict):
-                        more_results = getRecursively(item, field)
-                        for another_result in more_results:
-                            fieldsFound.append(another_result)
-    return fieldsFound
-sensitiveValues = getRecursively(cfg, cfg['sensitiveKeys'])
+def find_values(data, keys):
+    """Collect values of the given keys anywhere in a nested dict/list structure."""
+    if isinstance(keys, str):
+        keys = [keys]
+    found = []
+    if isinstance(data, dict):
+        for key, value in data.items():
+            if key in keys:
+                found.append(value)
+            else:
+                found.extend(find_values(value, keys))
+    elif isinstance(data, list):
+        for item in data:
+            found.extend(find_values(item, keys))
+    return found
+
+
 class SensitiveFormatter(logging.Formatter):
-    """Formatter that removes sensitive information in urls."""
-    @staticmethod
-    def _filter(s):
-        pattern = re.compile('|'.join(sensitiveValues))
-        return pattern.sub('[CLASSIFIED]', s)
+    """Masks sensitive config values (api keys etc.) in log output."""
+
+    def __init__(self, fmt, datefmt, sensitive_values):
+        super().__init__(fmt, datefmt=datefmt)
+        values = [str(value) for value in sensitive_values if value]
+        self.pattern = re.compile('|'.join(re.escape(value) for value in values)) if values else None
 
     def format(self, record):
-        original = logging.Formatter.format(self, record)
-        return self._filter(original)
-# }}
+        message = super().format(record)
+        if self.pattern is None:
+            return message
+        return self.pattern.sub('[CLASSIFIED]', message)
 
-# configure log format {{
-if cfg['logFile'] == 'stdout':
-    logging.basicConfig(
-        level       = logLevel,
-        format      = '%(asctime)s\t%(name)s\t%(levelname)s\t%(message)s',
-        datefmt     = '%Y-%m-%dT%H:%M:%S',
-    )
-else:
-    logging.basicConfig(
-        filename    = cfg['logFile'],
-        level       = logLevel,
-        format      = '%(asctime)s\t%(name)s\t%(levelname)s\t%(message)s',
-        datefmt     = '%Y-%m-%dT%H:%M:%S',
-    )
-for handler in logging.root.handlers:
-   handler.setFormatter(SensitiveFormatter('%(asctime)s\t%(name)s\t%(levelname)s\t%(message)s'))
+
+LOG_FORMAT = '%(asctime)s\t%(name)s\t%(funcName)s\t%(levelname)s\t%(message)s'
+LOG_DATE_FORMAT = '%Y-%m-%dT%H:%M:%S'
+
+
+def setup_logging(cfg):
+    level = parse_log_level(cfg['logLevel'])
+    if level > logging.DEBUG:
+        logging.getLogger("urllib3").setLevel(logging.WARNING)
+        logging.getLogger("requests").setLevel(logging.WARNING)
+    if cfg['logFile'] == 'stdout':
+        logging.basicConfig(level=level, format=LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
+    else:
+        os.makedirs(cfg['logDir'], exist_ok=True)
+        logging.basicConfig(filename=cfg['logFile'], level=level, format=LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
+    formatter = SensitiveFormatter(LOG_FORMAT, LOG_DATE_FORMAT, find_values(cfg, cfg['sensitiveKeys']))
+    for handler in logging.root.handlers:
+        handler.setFormatter(formatter)
+
+setup_logging(cfg)
 # }}

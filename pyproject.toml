@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rsh-tools"
+description = "ssh helpers: sr (root shell with privilege escalation), sExec/pExec (run commands on inventory groups), cloud inventory plugins"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{name = "Grigory Efimov"}]
+requires-python = ">=3.9"
+dynamic = ["version"]
+keywords = ["ssh", "sudo", "inventory", "aws", "gce", "ovh", "devops"]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "Operating System :: POSIX",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Systems Administration",
+]
+dependencies = [
+    "deepmerge>=1.1",
+    "pexpect>=4.8",
+    "python-gnupg>=0.5",
+    "PyYAML>=6.0",
+    "fabric>=3.2",
+    "braceexpand>=0.1.7",
+]
+
+[project.optional-dependencies]
+ovh = ["ovh>=1.1"]
+dev = ["pytest>=7", "build", "twine"]
+
+[project.urls]
+Homepage = "https://github.com/fb929/rsh"
+Issues = "https://github.com/fb929/rsh/issues"
+
+[project.scripts]
+sr = "rsh.sr:main"
+sExec = "rsh.execute:main_sequential"
+pExec = "rsh.execute:main_parallel"
+rshInventory = "rsh.build_inventory:main"
+rshCompgen = "rsh.compgen:main"
+
+[tool.setuptools]
+packages = ["rsh", "rsh.plugins"]
+
+[tool.setuptools.package-data]
+rsh = ["completion.bash"]
+
+[tool.setuptools.dynamic]
+version = {attr = "rsh.__version__"}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

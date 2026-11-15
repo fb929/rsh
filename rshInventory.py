@@ -1,116 +1,104 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""rshInventory - collect hosts from the enabled inventory plugins and write inventory.yaml."""
 
-import sys
-sys.path.append('/opt/rsh')
-import rsh
-import rsh.config
-import logging
-import json
-import inspect
-import re
 import os
+import sys
+# make the package next to this script win over any stale install (e.g. /opt/rsh),
+# resolving symlinks so launching via a symlink in PATH still finds it
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+sys.path.append('/opt/rsh')
+import json
+import logging
+import re
+
 import yaml
-import ovh
 
-logger = logging.getLogger(__name__)
+import rsh.config
+from rsh.plugins import PLUGINS
 
-# natural sort helper:
-# - split by non-alphanumeric
-# - then split into alpha vs digits
-# - compare strings before numbers; numbers as integers
-def _natsort_tokens_key(host):
-    left = str(host).split('.', 1)[0]  # strip domain part like ".aws"
-    rough_tokens = re.split(r'[^A-Za-z0-9]+', left)
+logger = logging.getLogger('rshInventory')
+
+
+def natural_sort_key(name):
+    """Token-aware natural order: 'web2' < 'web10'; the domain part (e.g. '.aws') is ignored."""
+    left = str(name).split('.', 1)[0]
     tokens = []
-    for t in rough_tokens:
-        if not t:
-            continue
-        parts = re.findall(r'[A-Za-z]+|\d+', t)
-        for p in parts:
-            if p.isdigit():
-                tokens.append((1, int(p)))
-            else:
-                tokens.append((0, p.lower()))
+    for rough in re.split(r'[^A-Za-z0-9]+', left):
+        for part in re.findall(r'[A-Za-z]+|\d+', rough):
+            tokens.append((1, int(part)) if part.isdigit() else (0, part.lower()))
     return tokens
 
-if __name__ == "__main__":
-    defName = "main"
-    logger.debug("%s: cfg='%s'" % (defName,json.dumps(rsh.config.cfg,indent=4)))
 
-    instancesInfoArray = list()
-    # inventory plugins
-    for key,value in rsh.config.cfg.items():
-        if re.match(r"^.+Inventory$", key):
-            inventoryConfig = rsh.config.cfg.get(key, None)
-            enable = inventoryConfig.get('enable', None)
-            if enable:
-                # make class obj from variable {{
-                klass = getattr(rsh, key)
-                inventoryClass = klass(rsh.config.cfg)
-                # }}
-                # generate inventory dict
-                instancesInfoArray.extend(inventoryClass.instancesInfo())
+def group_name(*parts):
+    name = '_'.join(part.replace('-', '_') for part in parts)
+    return re.sub(r'\s+', '_', name)
 
-    logger.debug("%s: instancesInfoArray='%s'" % (defName,json.dumps(instancesInfoArray,indent=4)))
 
-    inventory = dict()
-    inventory['hosts'] = dict()
-    inventory['groups'] = dict()
-    for instanceInfo in instancesInfoArray:
-        # hosts {{
-        try:
-            host = instanceInfo['host']
-        except:
-            print(instanceInfo)
-            logger.error(f"{defName}: key='host' not found in instanceInfo='{instanceInfo}'")
-            exit(1)
+def collect_records(cfg):
+    """Run every enabled plugin, return the merged list of normalized records."""
+    records = []
+    for key, plugin_class in PLUGINS.items():
+        if not (cfg.get(key) or {}).get('enable'):
+            logger.debug("plugin '%s' disabled", key)
+            continue
+        logger.debug("running plugin '%s'", key)
+        records.extend(plugin_class(cfg).instances_info())
+    for key in cfg:
+        if key.endswith('Inventory') and key not in PLUGINS:
+            logger.warning("config section '%s' has no matching inventory plugin, known: %s", key, sorted(PLUGINS))
+    return records
 
-        # get rsh inventory module name {{
-        rshInventoryModule = instanceInfo.get('rshInventoryModule', None)
 
-        # generage "hosts" for instance
-        if host not in inventory['hosts']:
-            inventory['hosts'][host] = { 'sshHost': instanceInfo['sshHost'] }
-            for hostInfoField in rsh.config.cfg[rshInventoryModule]['hostInfoFields']:
-                inventory['hosts'][host][hostInfoField] = instanceInfo[hostInfoField]
-        # }}
-        # groups {{
-        for tag in instanceInfo['tags']:
-            if tag['Key'] in rsh.config.cfg[rshInventoryModule]['skipTagsForMakeGroups']:
+def build_inventory(records, cfg):
+    """Turn plugin records into the {'hosts': ..., 'groups': ...} structure."""
+    hosts = {}
+    groups = {}
+
+    def add_to_group(name, host):
+        groups.setdefault(name, [])
+        if host not in groups[name]:
+            groups[name].append(host)
+
+    for record in records:
+        host = record.get('host')
+        if not host:
+            logger.error("record without 'host': %s", record)
+            sys.exit(1)
+        module = record.get('rshInventoryModule')
+        settings = cfg.get(module) or {}
+        if host not in hosts:
+            hosts[host] = {'sshHost': record['sshHost']}
+            for field in settings.get('hostInfoFields', []):
+                hosts[host][field] = record.get(field, 'unknown')
+        skip_tags = settings.get('skipTagsForMakeGroups', [])
+        for tag in record.get('tags', []):
+            if tag['Key'] in skip_tags:
                 continue
-            groupName = 'tag_' + tag['Key'].replace('-','_') + '_' + tag['Value'].replace('-','_')
-            groupName = re.sub(r'\s+', '_', groupName)
-            if groupName not in inventory['groups']:
-                inventory['groups'][groupName] = list()
-            if host not in inventory['groups'][groupName]:
-                inventory['groups'][groupName].append(host)
-        # }}
-        # groups by dc {{
-        hosting = instanceInfo.get('hosting', 'unknown')
-        groupName = 'dc_' + hosting +'_'+ instanceInfo['dc']
-        groupName = re.sub(r'\s+', '_', groupName)
-        if groupName not in inventory['groups']:
-            inventory['groups'][groupName] = list()
-        if host not in inventory['groups'][groupName]:
-            inventory['groups'][groupName].append(host)
-        # }}
+            add_to_group(group_name('tag', tag['Key'], tag['Value']), host)
+        add_to_group(group_name('dc', record.get('hosting', 'unknown'), record['dc']), host)
 
-    # natural sort hosts and groups {{
-    # hosts: sort hostnames using token-aware natural order
-    sorted_hostnames = sorted(inventory['hosts'].keys(), key=_natsort_tokens_key)
-    inventory['hosts'] = { hn: inventory['hosts'][hn] for hn in sorted_hostnames }
+    hosts = {name: hosts[name] for name in sorted(hosts, key=natural_sort_key)}
+    groups = {name: sorted(groups[name], key=natural_sort_key) for name in sorted(groups, key=natural_sort_key)}
+    return {'hosts': hosts, 'groups': groups}
 
-    # groups: sort group names; inside each group sort hosts using the same key
-    sorted_group_names = sorted(inventory['groups'].keys(), key=_natsort_tokens_key)
-    sorted_groups = dict()
-    for g in sorted_group_names:
-        sorted_groups[g] = sorted(inventory['groups'][g], key=_natsort_tokens_key)
-    inventory['groups'] = sorted_groups
-    # }}
 
-    # generating inventory file {{
-    logger.debug("%s: inventory='%s'" % (defName,inventory))
-    with open(os.path.expanduser(rsh.config.cfg['inventoryFilePath']), 'w') as f:
+def write_inventory(inventory, path):
+    path = os.path.expanduser(path)
+    with open(path, 'w') as f:
         yaml.dump(inventory, f, default_flow_style=False, sort_keys=False)
-    # }}
+    logger.info("inventory written to '%s': %d hosts, %d groups", path, len(inventory['hosts']), len(inventory['groups']))
+
+
+def main():
+    cfg = rsh.config.cfg
+    logger.debug("cfg=%s", json.dumps(cfg, indent=4))
+    records = collect_records(cfg)
+    logger.debug("records=%s", json.dumps(records, indent=4))
+    inventory = build_inventory(records, cfg)
+    logger.debug("inventory=%s", inventory)
+    write_inventory(inventory, cfg['inventoryFilePath'])
+
+
+if __name__ == "__main__":
+    main()
