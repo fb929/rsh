@@ -1,92 +1,49 @@
 name: Release
 
-
 on:
   push:
     tags:
       - 'v*.*.*'
 
-
-permissions: write-all
-
+permissions:
+  contents: write
 
 jobs:
-  build:
-    runs-on: ubuntu-22.04
-    strategy:
-      matrix:
-        arch:
-          - noarch
-        os:
-          - linux
-        include:
-          - arch: noarch
-            rpm_arch: noarch
-            deb_arch: all
+  publish:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: make build
-        run: make build
-
-      - name: get release version
-        id: release-version
-        run: |
-          echo "$GITHUB_REF_NAME" | sed 's|^[a-zA-Z]\+|RELEASE_VERSION=|' >> $GITHUB_OUTPUT
-
-      # create assets
-      - name: create package deb
-        uses: bpicode/github-action-fpm@master
+      - uses: actions/setup-python@v5
         with:
-          fpm_opts:
-            --name ${{ github.event.repository.name }}
-            --version ${{ steps.release-version.outputs.RELEASE_VERSION }}
-            --architecture ${{ matrix.deb_arch }}
-            --exclude '*/.gitignore'
-            --exclude '*/.git'
-            --input-type dir
-            --output-type deb
-            --chdir ./build
-          fpm_args: ./
-      - name: create package rpm
-        uses: bpicode/github-action-fpm@master
-        with:
-          fpm_opts:
-            --name ${{ github.event.repository.name }}
-            --version ${{ steps.release-version.outputs.RELEASE_VERSION }}
-            --architecture ${{ matrix.rpm_arch }}
-            --exclude '*/.gitignore'
-            --exclude '*/.git'
-            --input-type dir
-            --output-type rpm
-            --chdir ./build
-          fpm_args: ./
+          python-version: "3.12"
 
-      - name: debug
+      - name: check tag matches package version
         run: |
-          ls -al ./
+          tag_version="${GITHUB_REF_NAME#v}"
+          package_version="$(python -c 'import rsh; print(rsh.__version__)')"
+          if [ "$tag_version" != "$package_version" ]; then
+            echo "tag v$tag_version does not match rsh.__version__=$package_version" >&2
+            exit 1
+          fi
 
-      - name: Create release deb
-        uses: softprops/action-gh-release@v2
+      - name: install tooling
+        run: pip install build twine
+
+      - name: build sdist and wheel
+        run: python -m build
+
+      - name: check distributions
+        run: twine check dist/*
+
+      - name: upload to PyPI
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: twine upload --non-interactive dist/*
+
+      - name: create GitHub release
+        uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          draft: false
-          prerelease: false
           fail_on_unmatched_files: true
-          files: '*.deb'
-
-      - name: sleep between deb and rpm
-        run: sleep 3
-
-      - name: Create release rpm
-        uses: softprops/action-gh-release@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          generate_release_notes: true
-          draft: false
-          prerelease: false
-          fail_on_unmatched_files: true
-          files: '*.rpm'
+          files: dist/*

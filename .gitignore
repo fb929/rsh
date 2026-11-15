@@ -5,3 +5,7 @@ tmp/
 build/
 inventory.yaml
 .config.yaml
+dist/
+*.egg-info/
+.pytest_cache/
+.venv/
