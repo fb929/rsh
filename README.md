@@ -80,3 +80,4 @@ uploads them to PyPI (secret `PYPI_API_TOKEN`) and attaches them to the GitHub r
 
 ### all configuration options
 see the defaults in [rsh/config.py](rsh/config.py); `~/.rsh.yaml` (and `/etc/rsh/config.yaml`, `./.config.yaml`) are deep-merged over them
+
